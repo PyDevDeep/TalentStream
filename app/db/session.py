@@ -22,6 +22,7 @@ engine = create_async_engine(
     pool_recycle=1800,  # Оновлення з'єднань кожні 30 хв
     pool_pre_ping=True,  # Перевірка життєздатності з'єднання перед використанням
     echo=False,  # Встанови True для дебагу SQL запитів
+    connect_args={"statement_cache_size": 0},  # FIX: Вимкнення кешування для Supabase/PgBouncer
 )
 
 # Фабрика сесій
