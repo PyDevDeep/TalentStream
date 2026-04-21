@@ -16,12 +16,11 @@ result_backend: RedisAsyncResultBackend[bytes] = RedisAsyncResultBackend(
     result_ex_time=3600,
 )
 
-broker = ListQueueBroker(
-    url=redis_url,
-    result_backend=result_backend,  # type: ignore[arg-type]
+broker = (
+    ListQueueBroker(url=redis_url)
+    .with_result_backend(result_backend)
+    .with_middlewares(SimpleRetryMiddleware(default_retry_count=3))
 )
-
-broker.add_middleware(SimpleRetryMiddleware(default_retry_count=3))  # type: ignore[union-attr]
 
 
 @broker.on_event(TaskiqEvents.WORKER_STARTUP)
