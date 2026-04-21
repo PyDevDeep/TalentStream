@@ -1,0 +1,84 @@
+[tool.poetry]
+name = "job-scraper"
+version = "0.1.0"
+description = "Async Job Scraper with AI Parsing"
+authors = ["PyDevDeep"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12.0,<3.14"
+fastapi = "^0.110.0"
+uvicorn = {extras = ["standard"], version = "^0.29.0"}
+taskiq = "^0.12.2"
+taskiq-redis = "^1.2.2"
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.29"}
+alembic = "^1.13.1"
+asyncpg = "^0.30.0"
+redis = "^7.0.0"
+pydantic = "^2.6.4"
+pydantic-settings = "^2.2.1"
+httpx = {extras = ["http2"], version = "^0.27.0"}
+tenacity = "^8.2.3"
+structlog = "^24.1.0"
+sentry-sdk = {extras = ["fastapi"], version = "^2.0.0"}
+slack-sdk = "^3.27.1"
+openai = "^1.16.2"
+google-generativeai = "^0.8.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.1.1"
+pytest-asyncio = "^0.23.6"
+pytest-httpx = "^0.30.0"
+testcontainers = "^4.3.1"
+fakeredis = "^2.21.3"
+ruff = ">=0.9.5"
+pyright = ">=1.1.400"
+pre-commit = "^4.5.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+markers = [
+    "unit: fast isolated unit tests",
+    "integration: tests that touch real external services",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+exclude = [
+    "venv", ".venv", "__pycache__", "build", "dist",
+    "alembic", ".pytest_cache"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["F401", "E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pyright]
+include = ["app", "tests"]
+exclude = ["**/node_modules", "**/.*", "**/__pycache__", "build", "dist", "venv", ".venv", "alembic"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+useLibraryCodeForTypes = true
+reportMissingImports = true
+extraPaths = ["."]
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["."]
+reportPrivateUsage = "none"
+reportUnknownParameterType = "none"
+reportMissingParameterType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
