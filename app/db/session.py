@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -33,6 +34,7 @@ async_session = async_sessionmaker(
 )
 
 
+@asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Context manager для отримання сесії з автоматичним commit/rollback.

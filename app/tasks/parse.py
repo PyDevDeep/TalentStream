@@ -1,9 +1,89 @@
-from typing import Any
+"""
+File: app/tasks/parse.py
+Task: 3.1.2 - Implement parse_job task
+Dependencies: app.broker, app.clients, app.services, app.db, app.schemas
+"""
+
+import structlog
+from pydantic import ValidationError
+from redis.asyncio import Redis
 
 from app.broker import broker
+from app.clients import LLMRouter, SerperClient
+from app.config import get_settings
+from app.db.repository import JobRepository
+from app.db.session import get_session
+from app.schemas.job import ParsedJob
+from app.services import DedupService, FilterEngine, strip_noise
+
+logger = structlog.get_logger()
+settings = get_settings()
 
 
 @broker.task(task_name="parse_job")
-async def parse_job(url: str) -> dict[str, Any]:
-    """Заглушка для парсингу вакансії. Буде реалізована в Task 3.1.2."""
-    return {}
+async def parse_job(url: str) -> dict[str, object]:
+    """Пайплайн: dedup -> fetch -> clean -> LLM parse -> filter -> DB store."""
+    log = logger.bind(url=url)
+    log.info("parse_job_started")
+
+    # 1. Dedup Check (Redis)
+    redis_client: Redis = Redis.from_url(str(settings.redis_url))  # type: ignore[misc]
+    try:
+        dedup = DedupService(redis_client, ttl=settings.dedup_ttl_seconds)
+        if await dedup.is_duplicate(url):
+            log.info("job_skipped_duplicate_redis")
+            return {"status": "duplicate", "job_id": None}
+    finally:
+        await redis_client.aclose()
+
+    # 2. Fetch Raw Content (Serper View)
+    serper = SerperClient(api_key=settings.serper_api_key.get_secret_value())
+    try:
+        raw_text = await serper.view(url=url)
+        if not raw_text:
+            log.warning("empty_page_content")
+            return {"status": "error", "job_id": None}
+    except Exception as e:
+        log.error("serper_view_failed", error=str(e))
+        return {"status": "error", "job_id": None}
+    finally:
+        await serper.close()
+
+    # 3. Strip Noise
+    cleaned_text = strip_noise(raw_text)
+
+    # 4. LLM Parse
+    raw_json = await LLMRouter.extract_job_data(cleaned_text)
+    if not raw_json:
+        log.error("llm_parsing_failed")
+        return {"status": "error", "job_id": None}
+
+    # Валідація JSON через Pydantic [cite: 251]
+    try:
+        parsed_job = ParsedJob.model_validate_json(raw_json)
+        parsed_job.url = url  # Захист від галюцинацій моделі
+    except ValidationError as e:
+        log.error("pydantic_validation_failed", error=str(e), raw_json=raw_json)
+        return {"status": "error", "job_id": None}
+
+    # 5. Filter
+    filter_engine = FilterEngine(
+        keywords=settings.filter_keywords,
+        location=settings.filter_location,
+        salary_min=settings.filter_salary_min,
+    )
+    if not filter_engine.passes(parsed_job):
+        log.info("job_skipped_filtered")
+        return {"status": "filtered", "job_id": None}
+
+    # 6. Store in DB
+    async with get_session() as session:
+        repo = JobRepository(session)
+        job = await repo.upsert(parsed_job)
+
+        if not job:
+            log.info("job_duplicate_in_db")
+            return {"status": "duplicate_db", "job_id": None}
+
+        log.info("job_stored_successfully", job_id=job.id)
+        return {"status": "stored", "job_id": job.id}
