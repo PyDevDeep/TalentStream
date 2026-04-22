@@ -1,3 +1,4 @@
+import sentry_sdk
 import structlog
 from taskiq import TaskiqEvents, TaskiqMessage, TaskiqState
 from taskiq.middlewares import SimpleRetryMiddleware
@@ -36,7 +37,11 @@ async def shutdown(state: TaskiqState) -> None:
 
 
 def on_task_error(
-    message: TaskiqMessage, exception: Exception, *_args: object, **_kwargs: object
+    message: TaskiqMessage, exception: Exception, *args: object, **_kwargs: object
 ) -> None:
-    """Global task error handler."""
+    """Глобальний обробник помилок тасок."""
     logger.error("Task failed", task_name=message.task_name, error=str(exception))
+    if settings.sentry_dsn:
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("task_name", message.task_name)
+            sentry_sdk.capture_exception(exception)
