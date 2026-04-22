@@ -1,16 +1,5 @@
-from app.broker import broker
+from .notify import send_alert
+from .parse import parse_job
+from .scrape import scrape_job_page
 
-
-@broker.task(task_name="scrape_job_page")
-async def scrape_job_page(query: str) -> dict[str, object]:
-    """Stub for job scraping. Will be implemented in Phase 3."""
-    return {}
-
-
-@broker.task(task_name="send_alert")
-async def send_alert() -> dict[str, object]:
-    """Stub for sending alerts. Will be implemented in Phase 3."""
-    return {}
-
-
-__all__ = ["scrape_job_page", "send_alert"]
+__all__ = ["scrape_job_page", "parse_job", "send_alert"]
