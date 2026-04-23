@@ -16,6 +16,22 @@
 - **Real-time Notifications** — Slack integration for instant job alerts
 - **Production-Ready** — Async task queue (TaskIQ), database migrations (Alembic), structured logging (Structlog), and error tracking (Sentry)
 
+## 🚀 Features
+[existing content]
+
+## 📸 Demo
+
+### Slack Notifications in Action
+
+![TalentStream Slack Bot Example](slack-demo.png)
+
+The bot delivers structured job alerts directly to your Slack channel, including:
+- Job title and seniority level
+- Company name and location
+- Salary range (when available)
+- Required skills and technologies
+- Direct "View Job" link to the original posting
+
 ## 🛠 Tech Stack
 
 ### Core
