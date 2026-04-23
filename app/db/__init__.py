@@ -1,4 +1,4 @@
 from .repository import JobRepository
-from .session import engine, get_session
+from .session import get_engine, get_session
 
-__all__ = ["engine", "get_session", "JobRepository"]
+__all__ = ["get_engine", "get_session", "JobRepository"]

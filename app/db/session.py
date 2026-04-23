@@ -11,36 +11,42 @@ from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
 
-
-def _make_engine():  # type: ignore[no-untyped-def]
-    database_url = str(get_settings().database_url)
-    return create_async_engine(
-        database_url,
-        poolclass=NullPool,
-        echo=False,
-        connect_args={
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
-            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
-        },
-    )
+_engine = None
+_session_factory = None
 
 
-engine = _make_engine()
+def get_engine():  # type: ignore[no-untyped-def]
+    global _engine
+    if _engine is None:
+        database_url = str(get_settings().database_url)
+        _engine = create_async_engine(
+            database_url,
+            poolclass=NullPool,
+            echo=False,
+            connect_args={
+                "statement_cache_size": 0,
+                "prepared_statement_cache_size": 0,
+                "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+            },
+        )
+    return _engine
 
-async_session = async_sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-    class_=AsyncSession,
-)
+
+def _get_session_factory():  # type: ignore[no-untyped-def]
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = async_sessionmaker(
+            bind=get_engine(),
+            expire_on_commit=False,
+            class_=AsyncSession,
+        )
+    return _session_factory
 
 
 @asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Context manager для отримання сесії з автоматичним commit/rollback.
-    """
-    async with async_session() as session:
+    """Context manager для отримання сесії з автоматичним commit/rollback."""
+    async with _get_session_factory()() as session:
         try:
             yield session
             await session.commit()
