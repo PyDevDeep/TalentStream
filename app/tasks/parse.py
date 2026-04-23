@@ -1,8 +1,4 @@
-"""
-File: app/tasks/parse.py
-Task: 3.1.2 - Implement parse_job task
-Dependencies: app.broker, app.clients, app.services, app.db, app.schemas
-"""
+import json
 
 import structlog
 from pydantic import ValidationError
@@ -58,12 +54,13 @@ async def parse_job(url: str) -> dict[str, object]:
         log.error("llm_parsing_failed")
         return {"status": "error", "job_id": None}
 
-    # Валідація JSON через Pydantic [cite: 251]
+    # Валідація JSON через Pydantic
     try:
-        parsed_job = ParsedJob.model_validate_json(raw_json)
-        parsed_job.url = url  # Захист від галюцинацій моделі
-    except ValidationError as e:
-        log.error("pydantic_validation_failed", error=str(e), raw_json=raw_json)
+        raw_dict = json.loads(raw_json)
+        raw_dict["url"] = url  # Інжектимо точний URL до валідації
+        parsed_job = ParsedJob.model_validate(raw_dict)
+    except (ValidationError, json.JSONDecodeError) as e:
+        log.error("validation_failed", error=str(e), raw_json=raw_json)
         return {"status": "error", "job_id": None}
 
     # 5. Filter

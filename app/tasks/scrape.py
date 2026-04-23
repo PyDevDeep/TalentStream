@@ -19,7 +19,8 @@ async def scrape_job_page(query: str) -> dict[str, int]:
     tasks_queued = 0
 
     try:
-        urls = await client.search(query=query)
+        # Обмежуємо пошук до 3 результатів для економії кредитів під час дебагу
+        urls = await client.search(query=query, num_results=3)
         urls_found = len(urls)
 
         for url in urls:

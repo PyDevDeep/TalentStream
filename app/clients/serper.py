@@ -53,9 +53,9 @@ class SerperClient:
         reraise=True,
     )
     async def view(self, url: str) -> str:
-        """Fetch raw content сторінки через Serper View API."""
+        """Fetch raw content сторінки через Serper Scrape API."""
         response = await self.client.post(
-            "https://google.serper.dev/view",
+            "https://scrape.serper.dev",
             json={"url": url},
         )
         response.raise_for_status()
