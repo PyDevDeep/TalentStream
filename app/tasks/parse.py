@@ -13,7 +13,6 @@ from app.schemas.job import ParsedJob
 from app.services import DedupService, FilterEngine, strip_noise
 
 logger = structlog.get_logger()
-settings = get_settings()
 
 
 @broker.task(task_name="parse_job")
@@ -21,6 +20,8 @@ async def parse_job(url: str) -> dict[str, object]:
     """Пайплайн: dedup -> fetch -> clean -> LLM parse -> filter -> DB store."""
     log = logger.bind(url=url)
     log.info("parse_job_started")
+
+    settings = get_settings()
 
     # 1. Dedup Check (Redis)
     redis_client: Redis = Redis.from_url(str(settings.redis_url))  # type: ignore[misc]

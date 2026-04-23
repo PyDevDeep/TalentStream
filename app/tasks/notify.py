@@ -9,7 +9,6 @@ from app.db.session import get_session
 from app.notifications.slack import SlackNotifier
 
 logger = structlog.get_logger()
-settings = get_settings()
 
 
 @broker.task(task_name="send_alert")
@@ -17,6 +16,8 @@ async def send_alert() -> dict[str, int]:
     """Отримання невідправлених вакансій та їх публікація в Slack."""
     log = logger.bind(task="send_alert")
     log.info("send_alert_started")
+
+    settings = get_settings()
 
     sent_count = 0
     failed_count = 0

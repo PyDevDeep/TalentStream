@@ -144,19 +144,20 @@ class TestLLMRouterExtractJobData:
 class TestParseWithGemini:
     """Tests for parse_with_gemini() function."""
 
+    def _mock_model(self, token_count: int = 100) -> MagicMock:
+        m = MagicMock()
+        m.count_tokens.return_value.total_tokens = token_count
+        return m
+
     @pytest.mark.asyncio
     async def test_parse_success_returns_text(self) -> None:
         """Valid response → returns response.text."""
         mock_response = MagicMock()
         mock_response.text = '{"title": "Dev"}'
+        m = self._mock_model()
+        m.generate_content_async = AsyncMock(return_value=mock_response)
 
-        mock_token = MagicMock()
-        mock_token.total_tokens = 100
-
-        with patch("app.clients.llm.gemini_client.model") as mock_model:
-            mock_model.count_tokens.return_value = mock_token
-            mock_model.generate_content_async = AsyncMock(return_value=mock_response)
-
+        with patch("app.clients.llm.gemini_client._get_model", return_value=m):
             from app.clients.llm.gemini_client import parse_with_gemini
 
             result = await parse_with_gemini("short job text")
@@ -168,28 +169,22 @@ class TestParseWithGemini:
         """Text with >8000 tokens → truncated to 30000 chars before sending."""
         mock_response = MagicMock()
         mock_response.text = "{}"
-
-        mock_token = MagicMock()
-        mock_token.total_tokens = 9000  # exceeds threshold
-
         captured_prompts: list[str] = []
 
         async def capture_prompt(prompt: str) -> MagicMock:
             captured_prompts.append(prompt)
             return mock_response
 
-        with patch("app.clients.llm.gemini_client.model") as mock_model:
-            mock_model.count_tokens.return_value = mock_token
-            mock_model.generate_content_async = AsyncMock(side_effect=capture_prompt)
+        m = self._mock_model(token_count=9000)
+        m.generate_content_async = AsyncMock(side_effect=capture_prompt)
 
+        with patch("app.clients.llm.gemini_client._get_model", return_value=m):
             long_text = "x" * 40000
             from app.clients.llm.gemini_client import parse_with_gemini
 
             await parse_with_gemini(long_text)
 
-        # The prompt contains the truncated text (30000 chars) + EXTRACTION_PROMPT prefix
         assert len(captured_prompts) == 1
-        # truncated portion should not exceed 30000 chars inside the prompt
         assert "x" * 30001 not in captured_prompts[0]
 
     @pytest.mark.asyncio
@@ -197,10 +192,6 @@ class TestParseWithGemini:
         """ResourceExhausted on first call → retries and succeeds on second."""
         mock_response = MagicMock()
         mock_response.text = '{"title": "Dev"}'
-
-        mock_token = MagicMock()
-        mock_token.total_tokens = 100
-
         call_count = 0
 
         async def side_effect(prompt: str) -> MagicMock:
@@ -210,10 +201,10 @@ class TestParseWithGemini:
                 raise ResourceExhausted("quota exceeded")
             return mock_response
 
-        with patch("app.clients.llm.gemini_client.model") as mock_model:
-            mock_model.count_tokens.return_value = mock_token
-            mock_model.generate_content_async = AsyncMock(side_effect=side_effect)
+        m = self._mock_model()
+        m.generate_content_async = AsyncMock(side_effect=side_effect)
 
+        with patch("app.clients.llm.gemini_client._get_model", return_value=m):
             from app.clients.llm.gemini_client import parse_with_gemini
 
             result = await parse_with_gemini("job text")
@@ -226,10 +217,6 @@ class TestParseWithGemini:
         """ServiceUnavailable on first call → retries and succeeds."""
         mock_response = MagicMock()
         mock_response.text = "{}"
-
-        mock_token = MagicMock()
-        mock_token.total_tokens = 50
-
         call_count = 0
 
         async def side_effect(prompt: str) -> MagicMock:
@@ -239,10 +226,10 @@ class TestParseWithGemini:
                 raise ServiceUnavailable("service down")
             return mock_response
 
-        with patch("app.clients.llm.gemini_client.model") as mock_model:
-            mock_model.count_tokens.return_value = mock_token
-            mock_model.generate_content_async = AsyncMock(side_effect=side_effect)
+        m = self._mock_model(token_count=50)
+        m.generate_content_async = AsyncMock(side_effect=side_effect)
 
+        with patch("app.clients.llm.gemini_client._get_model", return_value=m):
             from app.clients.llm.gemini_client import parse_with_gemini
 
             result = await parse_with_gemini("job text")
@@ -253,15 +240,10 @@ class TestParseWithGemini:
     @pytest.mark.asyncio
     async def test_parse_max_retries_raises(self) -> None:
         """3 consecutive ResourceExhausted → raises after max retries."""
-        mock_token = MagicMock()
-        mock_token.total_tokens = 50
+        m = self._mock_model(token_count=50)
+        m.generate_content_async = AsyncMock(side_effect=ResourceExhausted("quota exceeded"))
 
-        with patch("app.clients.llm.gemini_client.model") as mock_model:
-            mock_model.count_tokens.return_value = mock_token
-            mock_model.generate_content_async = AsyncMock(
-                side_effect=ResourceExhausted("quota exceeded")
-            )
-
+        with patch("app.clients.llm.gemini_client._get_model", return_value=m):
             from app.clients.llm.gemini_client import parse_with_gemini
 
             with pytest.raises(ResourceExhausted):
@@ -270,9 +252,6 @@ class TestParseWithGemini:
     @pytest.mark.asyncio
     async def test_parse_non_retryable_exception_raises_immediately(self) -> None:
         """ValueError is not retried — raises immediately."""
-        mock_token = MagicMock()
-        mock_token.total_tokens = 50
-
         call_count = 0
 
         async def side_effect(prompt: str) -> None:
@@ -280,10 +259,10 @@ class TestParseWithGemini:
             call_count += 1
             raise ValueError("unexpected")
 
-        with patch("app.clients.llm.gemini_client.model") as mock_model:
-            mock_model.count_tokens.return_value = mock_token
-            mock_model.generate_content_async = AsyncMock(side_effect=side_effect)
+        m = self._mock_model(token_count=50)
+        m.generate_content_async = AsyncMock(side_effect=side_effect)
 
+        with patch("app.clients.llm.gemini_client._get_model", return_value=m):
             from app.clients.llm.gemini_client import parse_with_gemini
 
             with pytest.raises(ValueError):

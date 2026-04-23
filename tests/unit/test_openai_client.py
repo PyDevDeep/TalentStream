@@ -63,7 +63,9 @@ class TestParseWithOpenai:
         expected = '{"title": "Python Dev", "company": "Acme"}'
         completion = _make_completion(expected)
 
-        with patch("app.clients.llm.openai_client.client") as mock_client:
+        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_get_client.return_value = mock_client
             mock_client.chat.completions.create = AsyncMock(return_value=completion)
             from app.clients.llm.openai_client import parse_with_openai
 
@@ -76,7 +78,9 @@ class TestParseWithOpenai:
         """Verifies gpt-4o-mini, json_object format, and temperature=0.0 are used."""
         completion = _make_completion("{}")
 
-        with patch("app.clients.llm.openai_client.client") as mock_client:
+        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_get_client.return_value = mock_client
             mock_post = AsyncMock(return_value=completion)
             mock_client.chat.completions.create = mock_post
             from app.clients.llm.openai_client import parse_with_openai
@@ -93,7 +97,9 @@ class TestParseWithOpenai:
         """Job text is placed in the user message content."""
         completion = _make_completion("{}")
 
-        with patch("app.clients.llm.openai_client.client") as mock_client:
+        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_get_client.return_value = mock_client
             mock_post = AsyncMock(return_value=completion)
             mock_client.chat.completions.create = mock_post
             from app.clients.llm.openai_client import parse_with_openai
@@ -117,7 +123,9 @@ class TestParseWithOpenai:
                 raise _make_rate_limit_error()
             return completion
 
-        with patch("app.clients.llm.openai_client.client") as mock_client:
+        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_get_client.return_value = mock_client
             mock_client.chat.completions.create = AsyncMock(side_effect=side_effect)
             from app.clients.llm.openai_client import parse_with_openai
 
@@ -139,7 +147,9 @@ class TestParseWithOpenai:
                 raise _make_api_error()
             return completion
 
-        with patch("app.clients.llm.openai_client.client") as mock_client:
+        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_get_client.return_value = mock_client
             mock_client.chat.completions.create = AsyncMock(side_effect=side_effect)
             from app.clients.llm.openai_client import parse_with_openai
 
@@ -151,7 +161,9 @@ class TestParseWithOpenai:
     @pytest.mark.asyncio
     async def test_parse_max_retries_raises_rate_limit_error(self) -> None:
         """3 consecutive RateLimitErrors → raises after max retries."""
-        with patch("app.clients.llm.openai_client.client") as mock_client:
+        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_get_client.return_value = mock_client
             mock_client.chat.completions.create = AsyncMock(side_effect=_make_rate_limit_error())
             from app.clients.llm.openai_client import parse_with_openai
 
@@ -168,7 +180,9 @@ class TestParseWithOpenai:
             call_count += 1
             raise ValueError("unexpected")
 
-        with patch("app.clients.llm.openai_client.client") as mock_client:
+        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_get_client.return_value = mock_client
             mock_client.chat.completions.create = AsyncMock(side_effect=side_effect)
             from app.clients.llm.openai_client import parse_with_openai
 

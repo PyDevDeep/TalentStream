@@ -31,8 +31,8 @@ class TestOnTaskError:
 
     def test_logs_error_always(self) -> None:
         """on_task_error always logs task_name and error string."""
-        with patch("app.broker.settings") as mock_settings:
-            mock_settings.sentry_dsn = None
+        with patch("app.broker.get_settings") as mock_get_settings:
+            mock_get_settings.return_value.sentry_dsn = None
             with patch("app.broker.logger") as mock_logger:
                 from app.broker import on_task_error
 
@@ -40,7 +40,6 @@ class TestOnTaskError:
 
         mock_logger.error.assert_called_once()
         call_kwargs = mock_logger.error.call_args
-        # structlog uses positional event + keyword args
         assert "my_task" in str(call_kwargs)
         assert "boom" in str(call_kwargs)
 
@@ -49,8 +48,8 @@ class TestOnTaskError:
         exc = RuntimeError("task failed")
         msg = _make_message("failing_task")
 
-        with patch("app.broker.settings") as mock_settings:
-            mock_settings.sentry_dsn = "https://fake@sentry.io/123"
+        with patch("app.broker.get_settings") as mock_get_settings:
+            mock_get_settings.return_value.sentry_dsn = "https://fake@sentry.io/123"
             with patch("app.broker.sentry_sdk") as mock_sentry:
                 mock_scope = MagicMock()
                 mock_sentry.push_scope.return_value.__enter__ = MagicMock(return_value=mock_scope)
@@ -67,8 +66,8 @@ class TestOnTaskError:
         exc = RuntimeError("fail")
         msg = _make_message("tagged_task")
 
-        with patch("app.broker.settings") as mock_settings:
-            mock_settings.sentry_dsn = "https://fake@sentry.io/123"
+        with patch("app.broker.get_settings") as mock_get_settings:
+            mock_get_settings.return_value.sentry_dsn = "https://fake@sentry.io/123"
             with patch("app.broker.sentry_sdk") as mock_sentry:
                 mock_scope = MagicMock()
                 mock_sentry.push_scope.return_value.__enter__ = MagicMock(return_value=mock_scope)
@@ -82,8 +81,8 @@ class TestOnTaskError:
 
     def test_skips_sentry_when_no_dsn(self) -> None:
         """When sentry_dsn is None → sentry_sdk.capture_exception not called."""
-        with patch("app.broker.settings") as mock_settings:
-            mock_settings.sentry_dsn = None
+        with patch("app.broker.get_settings") as mock_get_settings:
+            mock_get_settings.return_value.sentry_dsn = None
             with patch("app.broker.sentry_sdk") as mock_sentry:
                 from app.broker import on_task_error
 

@@ -6,19 +6,18 @@ from taskiq_redis import ListQueueBroker, RedisAsyncResultBackend
 
 from app.config import get_settings
 
-settings = get_settings()
 logger = structlog.get_logger()
 
-redis_url = str(settings.redis_url)
+_redis_url = str(get_settings().redis_url)
 
 result_backend: RedisAsyncResultBackend[bytes] = RedisAsyncResultBackend(
-    redis_url=redis_url,
+    redis_url=_redis_url,
     keep_results=True,
     result_ex_time=3600,
 )
 
 broker = (
-    ListQueueBroker(url=redis_url)
+    ListQueueBroker(url=_redis_url)
     .with_result_backend(result_backend)
     .with_middlewares(SimpleRetryMiddleware(default_retry_count=3))
 )
@@ -41,7 +40,7 @@ def on_task_error(
 ) -> None:
     """Глобальний обробник помилок тасок."""
     logger.error("Task failed", task_name=message.task_name, error=str(exception))
-    if settings.sentry_dsn:
+    if get_settings().sentry_dsn:
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("task_name", message.task_name)
             sentry_sdk.capture_exception(exception)

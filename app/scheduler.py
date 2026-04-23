@@ -4,9 +4,9 @@ from taskiq_redis import RedisScheduleSource
 from app.broker import broker
 from app.config import get_settings
 
-settings = get_settings()
+_settings = get_settings()
 
-redis_source = RedisScheduleSource(str(settings.redis_url))
+redis_source = RedisScheduleSource(str(_settings.redis_url))
 
 scheduler = TaskiqScheduler(
     broker=broker,
@@ -18,9 +18,9 @@ SCHEDULED_TASKS: list[ScheduledTask] = [
         schedule_id="scrape_job_page_cron",
         task_name="scrape_job_page",
         labels={},
-        args=[settings.scrape_query],
+        args=[_settings.scrape_query],
         kwargs={},
-        cron=f"*/{settings.scrape_interval_minutes} * * * *",
+        cron=f"*/{_settings.scrape_interval_minutes} * * * *",
     ),
     ScheduledTask(
         schedule_id="send_alert_cron",

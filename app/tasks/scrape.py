@@ -6,7 +6,6 @@ from app.config import get_settings
 from app.tasks.parse import parse_job
 
 logger = structlog.get_logger()
-settings = get_settings()
 
 
 @broker.task(task_name="scrape_job_page")
@@ -14,7 +13,7 @@ async def scrape_job_page(query: str) -> dict[str, int]:
     """Пошук вакансій через Serper та постановка parse tasks у чергу."""
     logger.info("scrape_task_started", query=query)
 
-    client = SerperClient(api_key=settings.serper_api_key.get_secret_value())
+    client = SerperClient(api_key=get_settings().serper_api_key.get_secret_value())
     urls_found = 0
     tasks_queued = 0
 

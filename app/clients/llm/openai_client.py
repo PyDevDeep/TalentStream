@@ -12,10 +12,15 @@ from app.clients.llm.prompts import EXTRACTION_PROMPT
 from app.config import get_settings
 
 logger = structlog.get_logger()
-settings = get_settings()
 
-# Ініціалізація клієнта
-client = AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value())
+_client: AsyncOpenAI | None = None
+
+
+def _get_client() -> AsyncOpenAI:
+    global _client
+    if _client is None:
+        _client = AsyncOpenAI(api_key=get_settings().openai_api_key.get_secret_value())
+    return _client
 
 
 @retry(
@@ -27,7 +32,7 @@ client = AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value())
 async def parse_with_openai(text: str) -> str | None:
     """Парсинг тексту через OpenAI."""
     try:
-        response = await client.chat.completions.create(
+        response = await _get_client().chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": EXTRACTION_PROMPT},

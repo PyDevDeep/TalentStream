@@ -11,11 +11,11 @@ from app.scheduler import SCHEDULED_TASKS, redis_source
 from app.tasks.scrape import scrape_job_page
 
 logger = structlog.get_logger()
-settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    settings = get_settings()
     if settings.sentry_dsn:
         sentry_sdk.init(
             dsn=str(settings.sentry_dsn),
