@@ -30,6 +30,5 @@ jobs:
       - name: Run Ruff Formatter
         run: poetry run ruff format --check .
 
-      # Розкоментуй, коли додаш unit-тести
-      # - name: Run Pytest
-      #   run: poetry run pytest
+      - name: Run Pytest
+        run: poetry run pytest -m "not integration"
