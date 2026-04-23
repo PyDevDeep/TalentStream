@@ -1,3 +1,4 @@
+import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -18,11 +19,12 @@ DATABASE_URL = str(settings.database_url)
 # Створення асинхронного двигуна з налаштуваннями пулу
 engine = create_async_engine(
     DATABASE_URL,
-    poolclass=NullPool,  # Делегуємо пулінг на сторону Supabase
+    poolclass=NullPool,
     echo=False,
     connect_args={
         "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,  # Обов'язково для asyncpg
+        "prepared_statement_cache_size": 0,
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
     },
 )
 

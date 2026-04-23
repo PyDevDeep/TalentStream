@@ -50,4 +50,3 @@ htmlcov/
 test_notify.py
 flush_redis.py
 # Docker
-.dockerignore
