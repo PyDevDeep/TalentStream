@@ -12,15 +12,15 @@ done
 echo "Database is ready. Applying migrations..."
 alembic upgrade head
 
-# 1. Запуск TaskIQ Scheduler у фоні (оператор &)
+# Run scheduler in background.
 echo "Starting TaskIQ Scheduler..."
 taskiq scheduler app.scheduler:scheduler &
 
-# 2. Запуск TaskIQ Worker у фоні (з 1 воркером для економії RAM)
+# Run worker in background with a single process to conserve RAM.
 echo "Starting TaskIQ Worker..."
 taskiq worker app.broker:broker app.tasks --workers 1 &
 
-# 3. Запуск FastAPI сервера на головному потоці (щоб Render бачив, що сервіс живий)
-# Render автоматично прокидає змінну середовища $PORT (зазвичай 10000)
+# Run FastAPI on the main process so Render detects the service as live.
+# Render injects $PORT (typically 10000).
 echo "Starting Web API..."
 exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}

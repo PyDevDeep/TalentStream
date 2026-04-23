@@ -11,18 +11,15 @@ from app.schemas.job import ParsedJob
 
 class JobRepository:
     def __init__(self, session: AsyncSession):
-        """Ініціалізація з ін'єкцією сесії бази даних."""
+        """Initialize with an injected database session."""
         self.session = session
 
     def _generate_external_id(self, url: str) -> str:
-        """Генерація унікального ідентифікатора на основі URL."""
+        """Generate a unique identifier from the job URL using SHA-256."""
         return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
     async def upsert(self, job_data: ParsedJob) -> Optional[Job]:
-        """
-        Вставка нової вакансії або ігнорування, якщо external_id вже існує.
-        Повертає об'єкт Job при успішній вставці, або None при конфлікті.
-        """
+        """Insert a new job or ignore if external_id already exists. Returns the Job on insert, None on conflict."""
         external_id = self._generate_external_id(job_data.url)
 
         description_snippet = None
@@ -42,14 +39,13 @@ class JobRepository:
             source_url=job_data.url,
         )
 
-        # PostgreSQL ON CONFLICT
         stmt = stmt.on_conflict_do_nothing(index_elements=["external_id"]).returning(Job)
 
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_unnotified(self, limit: int = 50) -> Sequence[Job]:
-        """Отримання списку вакансій, які ще не відправлені у Slack."""
+        """Return jobs that have not yet been sent to Slack, ordered by creation time."""
         stmt = (
             select(Job).where(Job.notified.is_(False)).order_by(Job.created_at.asc()).limit(limit)
         )
@@ -57,12 +53,12 @@ class JobRepository:
         return result.scalars().all()
 
     async def mark_notified(self, job_id: int) -> None:
-        """Позначення вакансії як відправленої."""
+        """Mark a job as notified in the database."""
         stmt = update(Job).where(Job.id == job_id).values(notified=True)
         await self.session.execute(stmt)
 
     async def get_by_external_id(self, external_id: str) -> Optional[Job]:
-        """Пошук вакансії за external_id."""
+        """Look up a job by its external_id."""
         stmt = select(Job).where(Job.external_id == external_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()

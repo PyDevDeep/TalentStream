@@ -1,9 +1,3 @@
-"""
-File: app/clients/llm/openai_client.py
-Task: 1.2.1 - Implement LLM Clients
-Dependencies: openai, tenacity, app.config
-"""
-
 import structlog
 from openai import APIError, AsyncOpenAI, RateLimitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -17,6 +11,7 @@ _client: AsyncOpenAI | None = None
 
 
 def _get_client() -> AsyncOpenAI:
+    """Return the shared AsyncOpenAI client, initializing it on first call."""
     global _client
     if _client is None:
         _client = AsyncOpenAI(api_key=get_settings().openai_api_key.get_secret_value())
@@ -30,7 +25,7 @@ def _get_client() -> AsyncOpenAI:
     reraise=True,
 )
 async def parse_with_openai(text: str) -> str | None:
-    """Парсинг тексту через OpenAI."""
+    """Parse job text with OpenAI and return the raw JSON response string."""
     try:
         response = await _get_client().chat.completions.create(
             model="gpt-4o-mini",

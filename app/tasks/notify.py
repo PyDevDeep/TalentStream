@@ -13,7 +13,7 @@ logger = structlog.get_logger()
 
 @broker.task(task_name="send_alert")
 async def send_alert() -> dict[str, int]:
-    """Отримання невідправлених вакансій та їх публікація в Slack."""
+    """Fetch unnotified jobs and publish each one to Slack."""
     log = logger.bind(task="send_alert")
     log.info("send_alert_started")
 
@@ -44,7 +44,7 @@ async def send_alert() -> dict[str, int]:
                 else:
                     failed_count += 1
 
-                # Жорсткий rate limit Slack API (1 msg/sec)
+                # Slack API hard rate limit: 1 message per second.
                 await asyncio.sleep(1)
         finally:
             await notifier.close()

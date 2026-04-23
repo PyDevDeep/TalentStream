@@ -10,7 +10,7 @@ logger = structlog.get_logger()
 
 @broker.task(task_name="scrape_job_page")
 async def scrape_job_page(query: str) -> dict[str, int]:
-    """Пошук вакансій через Serper та постановка parse tasks у чергу."""
+    """Search for jobs via Serper and enqueue a parse task for each result URL."""
     logger.info("scrape_task_started", query=query)
 
     client = SerperClient(api_key=get_settings().serper_api_key.get_secret_value())
@@ -18,12 +18,10 @@ async def scrape_job_page(query: str) -> dict[str, int]:
     tasks_queued = 0
 
     try:
-        # Обмежуємо пошук до 3 результатів для економії кредитів під час дебагу
         urls = await client.search(query=query, num_results=3)
         urls_found = len(urls)
 
         for url in urls:
-            # Асинхронна постановка завдання в чергу (через Redis брокер)
             await parse_job.kiq(url)
             tasks_queued += 1
 

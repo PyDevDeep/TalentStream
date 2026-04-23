@@ -18,18 +18,17 @@ class ParsedJob(BaseModel):
 
     @model_validator(mode="after")
     def parse_salary_string(self) -> "ParsedJob":
-        """Парсить сирий рядок зарплати у salary_min та salary_max."""
+        """Parse raw salary string into salary_min and salary_max."""
         if not self.salary:
             return self
 
-        # Якщо LLM вже успішно розпарсив числа, пропускаємо
+        # Skip if LLM already extracted numeric values.
         if self.salary_min is not None or self.salary_max is not None:
             return self
 
-        # Очищення від ком та переведення в нижній регістр (10,000 -> 10000)
         clean_salary = self.salary.replace(",", "").lower()
 
-        # Пошук чисел з опціональним суфіксом 'k'
+        # Find numbers with optional 'k' suffix (e.g. "5k" → 5000).
         matches = re.findall(r"(\d+)(k)?", clean_salary)
         if not matches:
             return self
@@ -51,13 +50,13 @@ class ParsedJob(BaseModel):
 
 
 class JobCreate(ParsedJob):
-    """Схема для створення запису в БД. Успадковує валідовані поля з ParsedJob."""
+    """Schema for creating a DB record. Inherits validated fields from ParsedJob."""
 
     pass
 
 
 class JobResponse(BaseModel):
-    """Схема для віддачі даних через API з ORM-моделі."""
+    """Schema for returning job data via API from an ORM model."""
 
     id: int
     title: str
@@ -70,5 +69,5 @@ class JobResponse(BaseModel):
     notified: bool
     created_at: datetime
 
-    # Pydantic v2 налаштування для сумісності з SQLAlchemy моделями
+    # Pydantic v2: enable ORM mode for SQLAlchemy model compatibility.
     model_config = ConfigDict(from_attributes=True)

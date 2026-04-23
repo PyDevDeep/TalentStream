@@ -16,6 +16,7 @@ _session_factory = None
 
 
 def get_engine():  # type: ignore[no-untyped-def]
+    """Return the shared async engine, creating it on first call."""
     global _engine
     if _engine is None:
         database_url = str(get_settings().database_url)
@@ -33,6 +34,7 @@ def get_engine():  # type: ignore[no-untyped-def]
 
 
 def _get_session_factory():  # type: ignore[no-untyped-def]
+    """Return the shared session factory, creating it on first call."""
     global _session_factory
     if _session_factory is None:
         _session_factory = async_sessionmaker(
@@ -45,7 +47,7 @@ def _get_session_factory():  # type: ignore[no-untyped-def]
 
 @asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """Context manager для отримання сесії з автоматичним commit/rollback."""
+    """Yield an AsyncSession with automatic commit on success and rollback on error."""
     async with _get_session_factory()() as session:
         try:
             yield session

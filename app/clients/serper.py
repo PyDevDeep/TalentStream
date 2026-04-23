@@ -6,7 +6,7 @@ logger = structlog.get_logger()
 
 
 def _is_retryable(exc: BaseException) -> bool:
-    """Визначає, чи підлягає виняток повторній спробі."""
+    """Return True if the exception should trigger a retry."""
     if isinstance(exc, httpx.TimeoutException):
         return True
     if isinstance(exc, httpx.HTTPStatusError):
@@ -17,6 +17,7 @@ def _is_retryable(exc: BaseException) -> bool:
 
 class SerperClient:
     def __init__(self, api_key: str, timeout: float = 30.0):
+        """Initialize the async HTTP client with the given API key."""
         self.headers = {
             "X-API-KEY": api_key,
             "Content-Type": "application/json",
@@ -34,7 +35,7 @@ class SerperClient:
         reraise=True,
     )
     async def search(self, query: str, num_results: int = 10) -> list[str]:
-        """Пошук вакансій через Serper Search API."""
+        """Search for job listings via the Serper Search API and return result URLs."""
         response = await self.client.post(
             "https://google.serper.dev/search",
             json={"q": query, "num": num_results},
@@ -53,7 +54,7 @@ class SerperClient:
         reraise=True,
     )
     async def view(self, url: str) -> str:
-        """Fetch raw content сторінки через Serper Scrape API."""
+        """Fetch raw page content via the Serper Scrape API."""
         response = await self.client.post(
             "https://scrape.serper.dev",
             json={"url": url},

@@ -10,13 +10,13 @@ class FilterEngine:
         location: Optional[str] = None,
         salary_min: Optional[int] = None,
     ):
-        """Ініціалізація правил фільтрації."""
+        """Initialize the filter engine with optional keyword, location, and salary rules."""
         self.keywords = [k.lower() for k in keywords] if keywords else None
         self.location = location.lower() if location else None
         self.salary_min = salary_min
 
     def passes(self, job: ParsedJob) -> bool:
-        """Перевіряє, чи проходить вакансія всі активні фільтри."""
+        """Return True if the job satisfies all active filter rules."""
         if not self._matches_keywords(job):
             return False
         if not self._matches_location(job):

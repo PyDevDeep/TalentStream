@@ -12,6 +12,7 @@ _model = None
 
 
 def _get_model():  # type: ignore[no-untyped-def]
+    """Return the shared Gemini GenerativeModel, initializing it on first call."""
     global _model
     if _model is None:
         genai.configure(api_key=get_settings().gemini_api_key.get_secret_value())  # type: ignore[attr-defined]
@@ -29,7 +30,7 @@ def _get_model():  # type: ignore[no-untyped-def]
     reraise=True,
 )
 async def parse_with_gemini(text: str) -> str | None:
-    """Парсинг тексту через Google Gemini."""
+    """Parse job text with Google Gemini and return the raw JSON response string."""
     try:
         m = _get_model()
         token_count = m.count_tokens(text).total_tokens  # type: ignore[union-attr]

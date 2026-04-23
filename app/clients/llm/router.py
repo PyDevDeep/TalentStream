@@ -1,9 +1,3 @@
-"""
-File: app/clients/llm/router.py
-Task: 1.2.1 - Implement LLM Clients
-Dependencies: .openai_client, .gemini_client
-"""
-
 import structlog
 
 from .gemini_client import parse_with_gemini
@@ -13,7 +7,7 @@ logger = structlog.get_logger()
 
 
 def clean_json_response(raw: str) -> str:
-    """Очищення markdown-розмітки з відповіді LLM."""
+    """Strip markdown code fences from an LLM response."""
     raw = raw.strip()
     if raw.startswith("```json"):
         raw = raw[7:]
@@ -27,10 +21,7 @@ def clean_json_response(raw: str) -> str:
 class LLMRouter:
     @staticmethod
     async def extract_job_data(text: str) -> str | None:
-        """
-        Primary: OpenAI. Fallback: Gemini.
-        Повертає сирий JSON рядок або None при повному збої.
-        """
+        """Extract structured job data using OpenAI (primary) with Gemini as fallback. Returns raw JSON or None."""
         try:
             logger.info("llm_router_trying_openai")
             result = await parse_with_openai(text)

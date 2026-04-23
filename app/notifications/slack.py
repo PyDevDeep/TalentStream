@@ -13,15 +13,12 @@ logger = structlog.get_logger()
 
 class SlackNotifier:
     def __init__(self, bot_token: str, channel_id: str):
-        """Ініціалізація асинхронного клієнта Slack."""
+        """Initialize the async Slack client."""
         self.client = AsyncWebClient(token=bot_token)
         self.channel_id = channel_id
 
     async def send(self, job: Job) -> bool:
-        """
-        Відправляє повідомлення у Slack за допомогою Block Kit.
-        Повертає True, якщо повідомлення успішно доставлено.
-        """
+        """Send a Block Kit message to Slack. Returns True on success."""
         blocks = self._format_block_kit(job)
         fallback_text = f"New Job: {job.title} at {job.company}"
 
@@ -30,7 +27,7 @@ class SlackNotifier:
                 channel=self.channel_id,
                 text=fallback_text,
                 blocks=blocks,
-                unfurl_links=False,  # Вимикаємо стандартне прев'ю посилань Slack
+                unfurl_links=False,
             )
             logger.debug("slack_message_sent", job_id=job.id, ts=response["ts"])
             return True
@@ -42,8 +39,8 @@ class SlackNotifier:
             return False
 
     def _format_block_kit(self, job: Job) -> list[BlockKitBlock]:
-        """Форматує вакансію у масив блоків Block Kit."""
-        # Slack обмежує довжину заголовку до 150 символів
+        """Format a job into a Slack Block Kit block array."""
+        # Slack header block text limit is 150 chars.
         title = job.title[:145] + "..." if len(job.title) > 150 else job.title
 
         salary_text = "N/A"
@@ -73,7 +70,6 @@ class SlackNotifier:
         ]
 
         if job.skills:
-            # Slack section block text limit is 3000 chars, but skills won't exceed this.
             skills_text = ", ".join(job.skills)
             blocks.append(
                 {
@@ -106,7 +102,5 @@ class SlackNotifier:
         return blocks
 
     async def close(self) -> None:
-        """Очищення ресурсів клієнта (для дотримання контракту)."""
-        # slack-sdk AsyncWebClient автоматично керує сесією,
-        # але ми залишаємо метод для сумісності з `finally` блоком у тасці.
+        """No-op cleanup kept for interface compatibility with the task's finally block."""
         pass

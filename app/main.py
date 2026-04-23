@@ -44,6 +44,6 @@ class ScrapeRequest(BaseModel):
 
 @app.post("/scrape")
 async def trigger_scrape(request: ScrapeRequest) -> dict[str, str]:
-    """Ручний запуск процесу пошуку вакансій."""
+    """Manually trigger the job scraping pipeline."""
     task = await scrape_job_page.kiq(request.query)
     return {"task_id": task.task_id, "status": "queued", "query": request.query}

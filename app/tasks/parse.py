@@ -17,13 +17,12 @@ logger = structlog.get_logger()
 
 @broker.task(task_name="parse_job")
 async def parse_job(url: str) -> dict[str, object]:
-    """Пайплайн: dedup -> fetch -> clean -> LLM parse -> filter -> DB store."""
+    """Run the full pipeline: dedup → fetch → clean → LLM parse → filter → DB store."""
     log = logger.bind(url=url)
     log.info("parse_job_started")
 
     settings = get_settings()
 
-    # 1. Dedup Check (Redis)
     redis_client: Redis = Redis.from_url(str(settings.redis_url))  # type: ignore[misc]
     try:
         dedup = DedupService(redis_client, ttl=settings.dedup_ttl_seconds)
@@ -33,7 +32,6 @@ async def parse_job(url: str) -> dict[str, object]:
     finally:
         await redis_client.aclose()
 
-    # 2. Fetch Raw Content (Serper View)
     serper = SerperClient(api_key=settings.serper_api_key.get_secret_value())
     try:
         raw_text = await serper.view(url=url)
@@ -46,25 +44,21 @@ async def parse_job(url: str) -> dict[str, object]:
     finally:
         await serper.close()
 
-    # 3. Strip Noise
     cleaned_text = strip_noise(raw_text)
 
-    # 4. LLM Parse
     raw_json = await LLMRouter.extract_job_data(cleaned_text)
     if not raw_json:
         log.error("llm_parsing_failed")
         return {"status": "error", "job_id": None}
 
-    # Валідація JSON через Pydantic
     try:
         raw_dict = json.loads(raw_json)
-        raw_dict["url"] = url  # Інжектимо точний URL до валідації
+        raw_dict["url"] = url
         parsed_job = ParsedJob.model_validate(raw_dict)
     except (ValidationError, json.JSONDecodeError) as e:
         log.error("validation_failed", error=str(e), raw_json=raw_json)
         return {"status": "error", "job_id": None}
 
-    # 5. Filter
     filter_engine = FilterEngine(
         keywords=settings.filter_keywords,
         location=settings.filter_location,
@@ -74,7 +68,6 @@ async def parse_job(url: str) -> dict[str, object]:
         log.info("job_skipped_filtered")
         return {"status": "filtered", "job_id": None}
 
-    # 6. Store in DB
     async with get_session() as session:
         repo = JobRepository(session)
         job = await repo.upsert(parsed_job)

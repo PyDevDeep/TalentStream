@@ -23,7 +23,6 @@ class Job(Base):
     salary_max: Mapped[Optional[int]]
     salary_currency: Mapped[str] = mapped_column(String, server_default="USD")
 
-    # Використовуємо JSONB для PostgreSQL
     skills: Mapped[List[str]] = mapped_column(JSONB, server_default="[]")
 
     description_snippet: Mapped[Optional[str]] = mapped_column(String(500))
@@ -33,7 +32,7 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
-    # Частковий індекс для оптимізації вибірки невідправлених вакансій
+    # Partial index to speed up queries for unnotified jobs.
     __table_args__ = (
         Index(
             "ix_jobs_notified_false",

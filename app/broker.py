@@ -38,7 +38,7 @@ async def shutdown(state: TaskiqState) -> None:
 def on_task_error(
     message: TaskiqMessage, exception: Exception, *args: object, **_kwargs: object
 ) -> None:
-    """Глобальний обробник помилок тасок."""
+    """Global task error handler — logs and optionally reports to Sentry."""
     logger.error("Task failed", task_name=message.task_name, error=str(exception))
     if get_settings().sentry_dsn:
         with sentry_sdk.push_scope() as scope:
