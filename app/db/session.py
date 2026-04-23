@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
 
@@ -17,13 +18,12 @@ DATABASE_URL = str(settings.database_url)
 # Створення асинхронного двигуна з налаштуваннями пулу
 engine = create_async_engine(
     DATABASE_URL,
-    pool_size=10,  # Базовий розмір пулу
-    max_overflow=20,  # Максимальна кількість додаткових з'єднань
-    pool_timeout=30,  # Таймаут очікування з'єднання
-    pool_recycle=1800,  # Оновлення з'єднань кожні 30 хв
-    pool_pre_ping=True,  # Перевірка життєздатності з'єднання перед використанням
-    echo=False,  # Встанови True для дебагу SQL запитів
-    connect_args={"statement_cache_size": 0},  # FIX: Вимкнення кешування для Supabase/PgBouncer
+    poolclass=NullPool,  # Делегуємо пулінг на сторону Supabase
+    echo=False,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,  # Обов'язково для asyncpg
+    },
 )
 
 # Фабрика сесій
