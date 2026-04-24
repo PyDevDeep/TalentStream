@@ -31,4 +31,13 @@ jobs:
         run: poetry run ruff format --check .
 
       - name: Run Pytest
-        run: poetry run pytest -m "not integration"
+        env:
+          DATABASE_URL: "postgresql+asyncpg://user:pass@localhost:5432/testdb"
+          REDIS_URL: "redis://localhost:6379/0"
+          SERPER_API_KEY: "dummy_serper_key"
+          OPENAI_API_KEY: "dummy_openai_key"
+          GEMINI_API_KEY: "dummy_gemini_key"
+          SLACK_BOT_TOKEN: "dummy_slack_token"
+          SLACK_CHANNEL_ID: "dummy_channel_id"
+          SCRAPE_QUERY: "Python Developer"
+        run: poetry run pytest
