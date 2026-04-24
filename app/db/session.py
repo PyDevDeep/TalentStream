@@ -20,6 +20,12 @@ def get_engine():  # type: ignore[no-untyped-def]
     global _engine
     if _engine is None:
         database_url = str(get_settings().database_url)
+        # NullPool is intentional here.
+        # Supabase uses PgBouncer in transaction mode for connection pooling,
+        # which conflicts with client-side connection pooling (like SQLAlchemy's QueuePool).
+        # We delegate pooling entirely to the server side (Supabase).
+        # Setting statement_cache_size=0 and prepared_statement_cache_size=0
+        # is strictly required for PgBouncer compatibility.
         _engine = create_async_engine(
             database_url,
             poolclass=NullPool,

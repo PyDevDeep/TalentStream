@@ -1,6 +1,9 @@
+from typing import Any
+
 import sentry_sdk
 import structlog
-from taskiq import TaskiqEvents, TaskiqMessage, TaskiqState
+from redis.asyncio import Redis
+from taskiq import TaskiqEvents, TaskiqMessage, TaskiqMiddleware, TaskiqResult, TaskiqState
 from taskiq.middlewares import SimpleRetryMiddleware
 from taskiq_redis import ListQueueBroker, RedisAsyncResultBackend
 
@@ -16,31 +19,50 @@ result_backend: RedisAsyncResultBackend[bytes] = RedisAsyncResultBackend(
     result_ex_time=3600,
 )
 
+
+class ErrorLoggingMiddleware(TaskiqMiddleware):
+    """Middleware that logs task failures and reports them to Sentry."""
+
+    def on_error(
+        self,
+        message: TaskiqMessage,
+        result: TaskiqResult[Any],
+        exception: BaseException,
+    ) -> None:
+        logger.error(
+            "task_failed",
+            task_name=message.task_name,
+            task_id=message.task_id,
+            error=str(exception),
+        )
+        if get_settings().sentry_dsn:
+            with sentry_sdk.push_scope() as scope:
+                scope.set_tag("task_name", message.task_name)
+                scope.set_tag("task_id", message.task_id)
+                sentry_sdk.capture_exception(exception)
+
+
 broker = (
     ListQueueBroker(url=_redis_url)
     .with_result_backend(result_backend)
-    .with_middlewares(SimpleRetryMiddleware(default_retry_count=3))
+    .with_middlewares(
+        SimpleRetryMiddleware(default_retry_count=3),
+        ErrorLoggingMiddleware(),
+    )
 )
 
 
 @broker.on_event(TaskiqEvents.WORKER_STARTUP)
 async def startup(state: TaskiqState) -> None:
-    """Initialize resources on worker startup."""
-    logger.info("TaskIQ worker starting up...")
+    """Initialize shared resources on worker startup."""
+    settings = get_settings()
+    state.redis_client = Redis.from_url(str(settings.redis_url))  # type: ignore[reportUnknownMemberType]
+    logger.info("taskiq_worker_started", redis_url=str(settings.redis_url)[:20] + "...")
 
 
 @broker.on_event(TaskiqEvents.WORKER_SHUTDOWN)
 async def shutdown(state: TaskiqState) -> None:
-    """Clean up resources on worker shutdown."""
-    logger.info("TaskIQ worker shutting down...")
-
-
-def on_task_error(
-    message: TaskiqMessage, exception: Exception, *args: object, **_kwargs: object
-) -> None:
-    """Global task error handler — logs and optionally reports to Sentry."""
-    logger.error("Task failed", task_name=message.task_name, error=str(exception))
-    if get_settings().sentry_dsn:
-        with sentry_sdk.push_scope() as scope:
-            scope.set_tag("task_name", message.task_name)
-            sentry_sdk.capture_exception(exception)
+    """Clean up shared resources on worker shutdown."""
+    if hasattr(state, "redis_client"):
+        await state.redis_client.aclose()
+    logger.info("taskiq_worker_stopped")

@@ -23,7 +23,7 @@
 
 ### Slack Notifications in Action
 
-![TalentStream Slack Bot Example](slack-demo.png)
+![TalentStream Slack Bot Example](docs/slack-demo.png)
 
 The bot delivers structured job alerts directly to your Slack channel, including:
 - Job title and seniority level
