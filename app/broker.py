@@ -7,6 +7,9 @@ from taskiq import TaskiqEvents, TaskiqMessage, TaskiqMiddleware, TaskiqResult, 
 from taskiq.middlewares import SimpleRetryMiddleware
 from taskiq_redis import ListQueueBroker, RedisAsyncResultBackend
 
+from app.clients.llm.gemini_client import GeminiClient
+from app.clients.llm.openai_client import OpenAIClient
+from app.clients.llm.router import LLMRouter
 from app.config import get_settings
 
 logger = structlog.get_logger()
@@ -57,6 +60,11 @@ async def startup(state: TaskiqState) -> None:
     """Initialize shared resources on worker startup."""
     settings = get_settings()
     state.redis_client = Redis.from_url(str(settings.redis_url))  # type: ignore[reportUnknownMemberType]
+
+    openai_client = OpenAIClient(api_key=settings.openai_api_key.get_secret_value())
+    gemini_client = GeminiClient(api_key=settings.gemini_api_key.get_secret_value())
+    state.llm_router = LLMRouter(primary_client=openai_client, fallback_client=gemini_client)
+
     logger.info("taskiq_worker_started", redis_url=str(settings.redis_url)[:20] + "...")
 
 

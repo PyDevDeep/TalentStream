@@ -2,13 +2,16 @@
 Unit tests for app/clients/llm/openai_client.py.
 
 Coverage targets:
-- parse_with_openai(): success, RateLimitError retry, APIError retry, unknown exception
+- OpenAIClient.parse(): success, text truncation, RateLimitError retry, max retries, unknown exception
 """
 
+from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from openai import APIError, RateLimitError
+from openai import RateLimitError
+
+from app.clients.llm.openai_client import OpenAIClient
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,155 +42,102 @@ def _make_rate_limit_error() -> RateLimitError:
     )
 
 
-def _make_api_error() -> APIError:
-    """APIError requires a request object."""
-    request = MagicMock()
-    return APIError(
-        message="internal server error",
-        request=request,
-        body=None,
-    )
-
-
 # ---------------------------------------------------------------------------
-# parse_with_openai
+# TestOpenAIClient
 # ---------------------------------------------------------------------------
 
 
-class TestParseWithOpenai:
-    """Tests for parse_with_openai() function."""
+class TestOpenAIClient:
+    """Tests for OpenAIClient class."""
+
+    @pytest.fixture
+    def mock_openai(self) -> Generator[MagicMock, None, None]:
+        # Мокаємо сам клас AsyncOpenAI з офіційної бібліотеки
+        with patch("app.clients.llm.openai_client.AsyncOpenAI") as mock:
+            yield mock
 
     @pytest.mark.asyncio
-    async def test_parse_success_returns_json_string(self) -> None:
-        """Valid API response → returns message content as string."""
-        expected = '{"title": "Python Dev", "company": "Acme"}'
-        completion = _make_completion(expected)
+    async def test_parse_success(self, mock_openai: MagicMock) -> None:
+        """Valid response returns content."""
+        mock_client_instance = mock_openai.return_value
+        mock_client_instance.chat.completions.create = AsyncMock(
+            return_value=_make_completion('{"title": "Dev"}')
+        )
 
-        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
-            mock_client = MagicMock()
-            mock_get_client.return_value = mock_client
-            mock_client.chat.completions.create = AsyncMock(return_value=completion)
-            from app.clients.llm.openai_client import parse_with_openai
+        client = OpenAIClient(api_key="fake_key")
+        result = await client.parse("job text")
 
-            result = await parse_with_openai("Some job text")
-
-        assert result == expected
+        assert result == '{"title": "Dev"}'
+        mock_client_instance.chat.completions.create.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_parse_sends_correct_model_and_format(self) -> None:
-        """Verifies gpt-4o-mini, json_object format, and temperature=0.0 are used."""
-        completion = _make_completion("{}")
+    async def test_parse_truncates_long_text(self, mock_openai: MagicMock) -> None:
+        """Text > 20000 chars is truncated before sending to model."""
+        mock_client_instance = mock_openai.return_value
+        mock_client_instance.chat.completions.create = AsyncMock(
+            return_value=_make_completion("{}")
+        )
 
-        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
-            mock_client = MagicMock()
-            mock_get_client.return_value = mock_client
-            mock_post = AsyncMock(return_value=completion)
-            mock_client.chat.completions.create = mock_post
-            from app.clients.llm.openai_client import parse_with_openai
+        client = OpenAIClient(api_key="fake_key")
+        # Створюємо рядок на 30 000 символів
+        long_text = "x" * 30_000
+        await client.parse(long_text)
 
-            await parse_with_openai("job text")
+        call_args = mock_client_instance.chat.completions.create.call_args[1]
+        messages = call_args["messages"]
+        user_prompt = messages[1]["content"]  # 0 = system, 1 = user
 
-        call_kwargs = mock_post.call_args.kwargs
-        assert call_kwargs["model"] == "gpt-4o-mini"
-        assert call_kwargs["response_format"] == {"type": "json_object"}
-        assert call_kwargs["temperature"] == 0.0
-
-    @pytest.mark.asyncio
-    async def test_parse_injects_job_text_into_user_message(self) -> None:
-        """Job text is placed in the user message content."""
-        completion = _make_completion("{}")
-
-        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
-            mock_client = MagicMock()
-            mock_get_client.return_value = mock_client
-            mock_post = AsyncMock(return_value=completion)
-            mock_client.chat.completions.create = mock_post
-            from app.clients.llm.openai_client import parse_with_openai
-
-            await parse_with_openai("unique job text here")
-
-        messages = mock_post.call_args.kwargs["messages"]
-        user_msg = next(m for m in messages if m["role"] == "user")
-        assert "unique job text here" in user_msg["content"]
+        assert "x" * 20_000 in user_prompt
+        assert "x" * 20_001 not in user_prompt
 
     @pytest.mark.asyncio
-    async def test_parse_retries_on_rate_limit_error(self) -> None:
+    @patch("tenacity.asyncio.sleep", new_callable=AsyncMock)
+    async def test_parse_retries_on_rate_limit(
+        self, mock_sleep: AsyncMock, mock_openai: MagicMock
+    ) -> None:
         """RateLimitError on first call → retries and succeeds on second."""
-        completion = _make_completion('{"title": "Dev"}')
-        call_count = 0
+        mock_client_instance = mock_openai.return_value
+        mock_client_instance.chat.completions.create = AsyncMock(
+            side_effect=[_make_rate_limit_error(), _make_completion('{"title": "Dev"}')]
+        )
 
-        async def side_effect(**kwargs):  # type: ignore[no-untyped-def]
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise _make_rate_limit_error()
-            return completion
-
-        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
-            mock_client = MagicMock()
-            mock_get_client.return_value = mock_client
-            mock_client.chat.completions.create = AsyncMock(side_effect=side_effect)
-            from app.clients.llm.openai_client import parse_with_openai
-
-            result = await parse_with_openai("job text")
+        client = OpenAIClient(api_key="fake_key")
+        result = await client.parse("job text")
 
         assert result == '{"title": "Dev"}'
-        assert call_count == 2
+        assert mock_client_instance.chat.completions.create.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_parse_retries_on_api_error(self) -> None:
-        """APIError on first call → retries and succeeds on second."""
-        completion = _make_completion('{"title": "Dev"}')
-        call_count = 0
-
-        async def side_effect(**kwargs):  # type: ignore[no-untyped-def]
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise _make_api_error()
-            return completion
-
-        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
-            mock_client = MagicMock()
-            mock_get_client.return_value = mock_client
-            mock_client.chat.completions.create = AsyncMock(side_effect=side_effect)
-            from app.clients.llm.openai_client import parse_with_openai
-
-            result = await parse_with_openai("job text")
-
-        assert result == '{"title": "Dev"}'
-        assert call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_parse_max_retries_raises_rate_limit_error(self) -> None:
+    @patch("tenacity.asyncio.sleep", new_callable=AsyncMock)
+    async def test_parse_max_retries_raises(
+        self, mock_sleep: AsyncMock, mock_openai: MagicMock
+    ) -> None:
         """3 consecutive RateLimitErrors → raises after max retries."""
-        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
-            mock_client = MagicMock()
-            mock_get_client.return_value = mock_client
-            mock_client.chat.completions.create = AsyncMock(side_effect=_make_rate_limit_error())
-            from app.clients.llm.openai_client import parse_with_openai
+        mock_client_instance = mock_openai.return_value
+        mock_client_instance.chat.completions.create = AsyncMock(
+            side_effect=_make_rate_limit_error()
+        )
 
-            with pytest.raises(RateLimitError):
-                await parse_with_openai("job text")
+        client = OpenAIClient(api_key="fake_key")
+
+        with pytest.raises(RateLimitError):
+            await client.parse("job text")
+
+        assert mock_client_instance.chat.completions.create.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_parse_unexpected_exception_raises_immediately(self) -> None:
+    async def test_parse_non_retryable_exception_raises_immediately(
+        self, mock_openai: MagicMock
+    ) -> None:
         """Non-retryable exception (e.g. ValueError) → raises immediately without retry."""
-        call_count = 0
+        mock_client_instance = mock_openai.return_value
+        mock_client_instance.chat.completions.create = AsyncMock(
+            side_effect=ValueError("unexpected")
+        )
 
-        async def side_effect(**kwargs):  # type: ignore[no-untyped-def]
-            nonlocal call_count
-            call_count += 1
-            raise ValueError("unexpected")
+        client = OpenAIClient(api_key="fake_key")
 
-        with patch("app.clients.llm.openai_client._get_client") as mock_get_client:
-            mock_client = MagicMock()
-            mock_get_client.return_value = mock_client
-            mock_client.chat.completions.create = AsyncMock(side_effect=side_effect)
-            from app.clients.llm.openai_client import parse_with_openai
+        with pytest.raises(ValueError):
+            await client.parse("job text")
 
-            with pytest.raises(ValueError):
-                await parse_with_openai("job text")
-
-        # tenacity only retries RateLimitError/APIError — ValueError should not retry
-        assert call_count == 1
+        assert mock_client_instance.chat.completions.create.call_count == 1

@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from taskiq import Context, TaskiqDepends
 
 from app.broker import broker
-from app.clients import LLMRouter, SerperClient
+from app.clients import SerperClient
 from app.config import get_settings
 from app.db.repository import JobRepository
 from app.db.session import get_session
@@ -50,7 +50,9 @@ async def parse_job(
     cleaned_text = strip_noise(raw_text)
 
     # --- LLM extraction ---
-    raw_json = await LLMRouter.extract_job_data(cleaned_text)
+    llm_router = context.state.llm_router
+    raw_json = await llm_router.extract_job_data(cleaned_text)
+
     if not raw_json:
         log.error("llm_parsing_failed")
         return {"status": "error", "job_id": None}

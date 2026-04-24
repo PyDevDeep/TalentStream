@@ -1,42 +1,37 @@
+import openai
 import structlog
-from openai import APIError, AsyncOpenAI, RateLimitError
+from openai import AsyncOpenAI
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.clients.llm.prompts import EXTRACTION_PROMPT
-from app.config import get_settings
 
 logger = structlog.get_logger()
 
-_client: AsyncOpenAI | None = None
 
+class OpenAIClient:
+    def __init__(self, api_key: str):
+        self.client = AsyncOpenAI(api_key=api_key)
 
-def _get_client() -> AsyncOpenAI:
-    """Return the shared AsyncOpenAI client, initializing it on first call."""
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(api_key=get_settings().openai_api_key.get_secret_value())
-    return _client
-
-
-@retry(
-    retry=retry_if_exception_type((RateLimitError, APIError)),
-    wait=wait_exponential(multiplier=2, min=2, max=30),
-    stop=stop_after_attempt(3),
-    reraise=True,
-)
-async def parse_with_openai(text: str) -> str | None:
-    """Parse job text with OpenAI and return the raw JSON response string."""
-    try:
-        response = await _get_client().chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": EXTRACTION_PROMPT},
-                {"role": "user", "content": f"Job Text:\n{text}"},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        logger.error("openai_parse_error", error=str(e))
-        raise
+    @retry(
+        retry=retry_if_exception_type(
+            (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError)
+        ),
+        wait=wait_exponential(multiplier=2, min=2, max=60),
+        stop=stop_after_attempt(3),
+        reraise=True,
+    )
+    async def parse(self, text: str) -> str | None:
+        try:
+            response = await self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a job parser. Return JSON only."},
+                    {"role": "user", "content": f"{EXTRACTION_PROMPT}\n\n{text[:20000]}"},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error("openai_parsing_failed", error=str(e))
+            raise
