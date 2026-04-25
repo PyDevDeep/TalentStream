@@ -120,7 +120,7 @@ class TestGeminiClient:
         assert "_THIS_SHOULD_BE_CUT" not in call_args
 
     @pytest.mark.asyncio
-    @patch("tenacity.asyncio.sleep", new_callable=AsyncMock)
+    @patch("asyncio.sleep", new_callable=AsyncMock)
     async def test_parse_retries_on_resource_exhausted(
         self, mock_sleep: AsyncMock, mock_genai: MagicMock
     ) -> None:
@@ -141,7 +141,7 @@ class TestGeminiClient:
         assert mock_model.generate_content_async.call_count == 2
 
     @pytest.mark.asyncio
-    @patch("tenacity.asyncio.sleep", new_callable=AsyncMock)
+    @patch("asyncio.sleep", new_callable=AsyncMock)
     async def test_parse_max_retries_raises(
         self, mock_sleep: AsyncMock, mock_genai: MagicMock
     ) -> None:

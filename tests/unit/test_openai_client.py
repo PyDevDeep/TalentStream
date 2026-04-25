@@ -91,7 +91,7 @@ class TestOpenAIClient:
         assert "x" * 20_001 not in user_prompt
 
     @pytest.mark.asyncio
-    @patch("tenacity.asyncio.sleep", new_callable=AsyncMock)
+    @patch("asyncio.sleep", new_callable=AsyncMock)
     async def test_parse_retries_on_rate_limit(
         self, mock_sleep: AsyncMock, mock_openai: MagicMock
     ) -> None:
@@ -108,7 +108,7 @@ class TestOpenAIClient:
         assert mock_client_instance.chat.completions.create.call_count == 2
 
     @pytest.mark.asyncio
-    @patch("tenacity.asyncio.sleep", new_callable=AsyncMock)
+    @patch("asyncio.sleep", new_callable=AsyncMock)
     async def test_parse_max_retries_raises(
         self, mock_sleep: AsyncMock, mock_openai: MagicMock
     ) -> None:

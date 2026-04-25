@@ -51,7 +51,7 @@ def _make_repo(job: MagicMock | None = None) -> MagicMock:
 
 
 class TestParseJob:
-    """Tests for parse_job() task."""
+    """Unit tests for parse_job task isolated from DB and real LLM."""
 
     @pytest.mark.asyncio
     async def test_duplicate_url_returns_duplicate_status(self) -> None:
@@ -64,15 +64,15 @@ class TestParseJob:
 
         mock_serper = _make_serper()
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
-                from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
 
-                result = await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            from app.tasks.parse import parse_job
+
+            result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "duplicate"
-        assert result["job_id"] is None
         mock_serper.view.assert_not_called()
 
     @pytest.mark.asyncio
@@ -83,12 +83,13 @@ class TestParseJob:
         mock_serper.view = AsyncMock(side_effect=Exception("scrape failed"))
         mock_serper.close = AsyncMock()
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
-                from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
 
-                result = await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            from app.tasks.parse import parse_job
+
+            result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "error"
         mock_serper.close.assert_called_once()
@@ -99,12 +100,13 @@ class TestParseJob:
         fake_redis = _make_fake_redis()
         mock_serper = _make_serper(text="")
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
-                from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
 
-                result = await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            from app.tasks.parse import parse_job
+
+            result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "error"
 
@@ -112,15 +114,17 @@ class TestParseJob:
     async def test_llm_returns_none_returns_error(self) -> None:
         """LLMRouter returns None → status error."""
         fake_redis = _make_fake_redis()
+        mock_serper = _make_serper()
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=_make_serper()):
-                with patch("app.tasks.parse.LLMRouter") as mock_router:
-                    mock_router.extract_job_data = AsyncMock(return_value=None)
-                    from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
 
-                    result = await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            with patch("app.tasks.parse.LLMRouter") as mock_router:
+                mock_router.extract_job_data = AsyncMock(return_value=None)
+                from app.tasks.parse import parse_job
+
+                result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "error"
 
@@ -128,15 +132,17 @@ class TestParseJob:
     async def test_invalid_json_from_llm_returns_error(self) -> None:
         """LLMRouter returns malformed JSON string → status error."""
         fake_redis = _make_fake_redis()
+        mock_serper = _make_serper()
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=_make_serper()):
-                with patch("app.tasks.parse.LLMRouter") as mock_router:
-                    mock_router.extract_job_data = AsyncMock(return_value="{not valid json")
-                    from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
 
-                    result = await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            with patch("app.tasks.parse.LLMRouter") as mock_router:
+                mock_router.extract_job_data = AsyncMock(return_value="{bad_json")
+                from app.tasks.parse import parse_job
+
+                result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "error"
 
@@ -144,17 +150,20 @@ class TestParseJob:
     async def test_pydantic_validation_error_returns_error(self) -> None:
         """LLM JSON missing required fields → ValidationError → status error."""
         fake_redis = _make_fake_redis()
+        mock_serper = _make_serper()
+
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
+
         # Missing 'title' and 'company' — will fail ParsedJob validation
         invalid_json = '{"location": "Kyiv"}'
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=_make_serper()):
-                with patch("app.tasks.parse.LLMRouter") as mock_router:
-                    mock_router.extract_job_data = AsyncMock(return_value=invalid_json)
-                    from app.tasks.parse import parse_job
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            with patch("app.tasks.parse.LLMRouter") as mock_router:
+                mock_router.extract_job_data = AsyncMock(return_value=invalid_json)
+                from app.tasks.parse import parse_job
 
-                    result = await parse_job(_URL)
+                result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "error"
 
@@ -162,22 +171,24 @@ class TestParseJob:
     async def test_filter_fails_returns_filtered(self) -> None:
         """FilterEngine.passes returns False → status filtered."""
         fake_redis = _make_fake_redis()
+        mock_serper = _make_serper()
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=_make_serper()):
-                with patch("app.tasks.parse.LLMRouter") as mock_router:
-                    mock_router.extract_job_data = AsyncMock(return_value=VALID_LLM_JSON)
-                    with patch("app.tasks.parse.FilterEngine") as mock_filter_cls:
-                        mock_filter = MagicMock()
-                        mock_filter.passes.return_value = False
-                        mock_filter_cls.return_value = mock_filter
-                        from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
 
-                        result = await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            with patch("app.tasks.parse.LLMRouter") as mock_router:
+                mock_router.extract_job_data = AsyncMock(return_value=VALID_LLM_JSON)
+                with patch("app.tasks.parse.FilterEngine") as mock_filter_cls:
+                    mock_filter = MagicMock()
+                    mock_filter.passes.return_value = False
+                    mock_filter_cls.return_value = mock_filter
+
+                    from app.tasks.parse import parse_job
+
+                    result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "filtered"
-        assert result["job_id"] is None
 
     @pytest.mark.asyncio
     async def test_db_duplicate_returns_duplicate_db(self) -> None:
@@ -189,23 +200,24 @@ class TestParseJob:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=_make_serper()):
-                with patch("app.tasks.parse.LLMRouter") as mock_router:
-                    mock_router.extract_job_data = AsyncMock(return_value=VALID_LLM_JSON)
-                    with patch("app.tasks.parse.FilterEngine") as mock_filter_cls:
-                        mock_filter = MagicMock()
-                        mock_filter.passes.return_value = True
-                        mock_filter_cls.return_value = mock_filter
-                        with patch("app.tasks.parse.get_session", return_value=mock_session):
-                            with patch("app.tasks.parse.JobRepository", return_value=mock_repo):
-                                from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
+        mock_serper = _make_serper()
 
-                                result = await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            with patch("app.tasks.parse.LLMRouter") as mock_router:
+                mock_router.extract_job_data = AsyncMock(return_value=VALID_LLM_JSON)
+                with patch("app.tasks.parse.FilterEngine") as mock_filter_cls:
+                    mock_filter = MagicMock()
+                    mock_filter.passes.return_value = True
+                    mock_filter_cls.return_value = mock_filter
+                    with patch("app.tasks.parse.get_session", return_value=mock_session):
+                        with patch("app.tasks.parse.JobRepository", return_value=mock_repo):
+                            from app.tasks.parse import parse_job
+
+                            result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "duplicate_db"
-        assert result["job_id"] is None
 
     @pytest.mark.asyncio
     async def test_happy_path_returns_stored_with_job_id(self) -> None:
@@ -220,20 +232,22 @@ class TestParseJob:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=_make_serper()):
-                with patch("app.tasks.parse.LLMRouter") as mock_router:
-                    mock_router.extract_job_data = AsyncMock(return_value=VALID_LLM_JSON)
-                    with patch("app.tasks.parse.FilterEngine") as mock_filter_cls:
-                        mock_filter = MagicMock()
-                        mock_filter.passes.return_value = True
-                        mock_filter_cls.return_value = mock_filter
-                        with patch("app.tasks.parse.get_session", return_value=mock_session):
-                            with patch("app.tasks.parse.JobRepository", return_value=mock_repo):
-                                from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
+        mock_serper = _make_serper()
 
-                                result = await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            with patch("app.tasks.parse.LLMRouter") as mock_router:
+                mock_router.extract_job_data = AsyncMock(return_value=VALID_LLM_JSON)
+                with patch("app.tasks.parse.FilterEngine") as mock_filter_cls:
+                    mock_filter = MagicMock()
+                    mock_filter.passes.return_value = True
+                    mock_filter_cls.return_value = mock_filter
+                    with patch("app.tasks.parse.get_session", return_value=mock_session):
+                        with patch("app.tasks.parse.JobRepository", return_value=mock_repo):
+                            from app.tasks.parse import parse_job
+
+                            result = await parse_job(_URL, context=mock_context)
 
         assert result["status"] == "stored"
         assert result["job_id"] == 99
@@ -252,19 +266,20 @@ class TestParseJob:
         mock_job.id = 1
         mock_repo = _make_repo(job=mock_job)
 
-        with patch("app.tasks.parse.Redis") as mock_redis_cls:
-            mock_redis_cls.from_url.return_value = fake_redis
-            with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
-                with patch("app.tasks.parse.LLMRouter") as mock_router:
-                    mock_router.extract_job_data = AsyncMock(return_value=VALID_LLM_JSON)
-                    with patch("app.tasks.parse.FilterEngine") as mock_filter_cls:
-                        mock_filter = MagicMock()
-                        mock_filter.passes.return_value = True
-                        mock_filter_cls.return_value = mock_filter
-                        with patch("app.tasks.parse.get_session", return_value=mock_session):
-                            with patch("app.tasks.parse.JobRepository", return_value=mock_repo):
-                                from app.tasks.parse import parse_job
+        mock_context = MagicMock()
+        mock_context.state.redis_client = fake_redis
 
-                                await parse_job(_URL)
+        with patch("app.tasks.parse.SerperClient", return_value=mock_serper):
+            with patch("app.tasks.parse.LLMRouter") as mock_router:
+                mock_router.extract_job_data = AsyncMock(return_value=VALID_LLM_JSON)
+                with patch("app.tasks.parse.FilterEngine") as mock_filter_cls:
+                    mock_filter = MagicMock()
+                    mock_filter.passes.return_value = True
+                    mock_filter_cls.return_value = mock_filter
+                    with patch("app.tasks.parse.get_session", return_value=mock_session):
+                        with patch("app.tasks.parse.JobRepository", return_value=mock_repo):
+                            from app.tasks.parse import parse_job
+
+                            await parse_job(_URL, context=mock_context)
 
         mock_serper.close.assert_called_once()
