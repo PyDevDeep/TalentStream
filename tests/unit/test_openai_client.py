@@ -52,7 +52,7 @@ class TestOpenAIClient:
 
     @pytest.fixture
     def mock_openai(self) -> Generator[MagicMock, None, None]:
-        # Мокаємо сам клас AsyncOpenAI з офіційної бібліотеки
+        # Mock the AsyncOpenAI class from the official library
         with patch("app.clients.llm.openai_client.AsyncOpenAI") as mock:
             yield mock
 
@@ -79,7 +79,7 @@ class TestOpenAIClient:
         )
 
         client = OpenAIClient(api_key="fake_key")
-        # Створюємо рядок на 30 000 символів
+        # Create a string of 30,000 characters
         long_text = "x" * 30_000
         await client.parse(long_text)
 

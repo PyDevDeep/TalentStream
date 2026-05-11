@@ -10,6 +10,7 @@ logger = structlog.get_logger()
 
 class GeminiClient:
     def __init__(self, api_key: str) -> None:
+        """Initialize the Gemini client with the given API key."""
         genai.configure(api_key=api_key)  # type: ignore[attr-defined]
         self.model = genai.GenerativeModel(  # type: ignore[attr-defined]
             "gemini-2.5-flash",
@@ -24,6 +25,7 @@ class GeminiClient:
         reraise=True,
     )
     async def parse(self, text: str) -> str | None:
+        """Parse job text using Gemini and return JSON string."""
         try:
             text_safe = text[: self._max_text_chars]
 

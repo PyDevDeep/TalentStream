@@ -74,7 +74,7 @@ class TestScrapeJobPageTask:
     @pytest.mark.asyncio
     async def test_scrape_success_queues_parse_tasks(self) -> None:
         mock_serper = MagicMock()
-        # ВИПРАВЛЕННЯ: SerperClient.search повертає список рядків, а не словників!
+        # FIX: SerperClient.search returns a list of strings, not dictionaries!
         mock_serper.search = AsyncMock(
             return_value=[
                 "https://example.com/job1",
@@ -96,7 +96,7 @@ class TestScrapeJobPageTask:
         assert result["tasks_queued"] == 2
         assert mock_kiq.call_count == 2
 
-        # Тепер стандартний assert_any_call працюватиме ідеально
+        # Now the standard assert_any_call will work perfectly
         mock_kiq.assert_any_call("https://example.com/job1")
         mock_kiq.assert_any_call("https://example.com/job2")
 
@@ -219,7 +219,7 @@ class TestParseJobPipeline:
             with patch("app.tasks.parse.get_settings") as mock_settings:
                 settings = MagicMock()
                 settings.filter_keywords = ["Python"]
-                # ВИПРАВЛЕНО: filter_location тепер рядок, а не список
+                # FIXED: filter_location is now a string, not a list
                 settings.filter_location = "Kyiv"
                 settings.filter_salary_min = 0
                 settings.dedup_ttl_seconds = 3600

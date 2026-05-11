@@ -7,11 +7,12 @@ logger = structlog.get_logger()
 
 class LLMRouter:
     def __init__(self, primary_client: LLMClientProtocol, fallback_client: LLMClientProtocol):
+        """Initialize the router with primary and fallback LLM clients."""
         self.primary = primary_client
         self.fallback = fallback_client
 
     async def extract_job_data(self, text: str) -> str | None:
-        """Спробувати первинний клієнт, при невдачі — fallback."""
+        """Try the primary client, fallback on failure."""
         try:
             logger.info("llm_router_trying_primary")
             return await self.primary.parse(text)

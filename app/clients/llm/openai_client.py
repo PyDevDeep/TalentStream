@@ -10,6 +10,7 @@ logger = structlog.get_logger()
 
 class OpenAIClient:
     def __init__(self, api_key: str):
+        """Initialize the OpenAI client with the given API key."""
         self.client = AsyncOpenAI(api_key=api_key)
 
     @retry(
@@ -21,6 +22,7 @@ class OpenAIClient:
         reraise=True,
     )
     async def parse(self, text: str) -> str | None:
+        """Parse job text using OpenAI and return JSON string."""
         try:
             response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",

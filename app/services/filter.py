@@ -26,6 +26,7 @@ class FilterEngine:
         return True
 
     def _matches_keywords(self, job: ParsedJob) -> bool:
+        """Check if job matches any of the required keywords."""
         if not self.keywords:
             return True
 
@@ -33,6 +34,7 @@ class FilterEngine:
         return any(keyword in search_text for keyword in self.keywords)
 
     def _matches_location(self, job: ParsedJob) -> bool:
+        """Check if job matches the required location."""
         if not self.location:
             return True
         if not job.location:
@@ -40,6 +42,7 @@ class FilterEngine:
         return self.location in job.location.lower()
 
     def _meets_salary(self, job: ParsedJob) -> bool:
+        """Check if job meets the minimum salary requirement."""
         if not self.salary_min:
             return True
         if not job.salary_min:
