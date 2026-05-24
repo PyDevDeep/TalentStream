@@ -391,12 +391,4 @@ docker compose exec app python test_notify.py
 - Review logs for rate limit errors
 - Verify noise stripper output length (should be < 5000 chars)
 
-## 📞 Support
-
-For issues and questions:
-- GitHub Issues: [https://github.com/PyDevDeep/TalentStream/issues](https://github.com/PyDevDeep/TalentStream/issues)
-- Repository: [https://github.com/PyDevDeep/TalentStream](https://github.com/PyDevDeep/TalentStream)
-
----
-
 **Built with ❤️ using Python, FastAPI, and asyncio**
